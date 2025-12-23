@@ -1,0 +1,13 @@
+.git
+node_modules
+*.exe
+__pycache__
+.env
+bot_accounts_secret.txt
+build/
+dist/
+*.spec
+*.pyc
+.dockerignore
+Dockerfile
+README.md

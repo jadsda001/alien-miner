@@ -1,0 +1,14 @@
+{
+    "name": "alien-worlds-bot",
+    "version": "1.0.0",
+    "description": "Alien Worlds mining script",
+    "main": "mine.js",
+    "scripts": {
+        "start": "node mine.js"
+    },
+    "dependencies": {
+        "eosjs": "^22.1.0",
+        "node-fetch": "^2.6.7",
+        "dotenv": "^16.0.3"
+    }
+}

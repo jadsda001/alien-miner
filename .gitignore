@@ -1,0 +1,23 @@
+# Secrets - NEVER commit these
+.env
+bot_accounts_secret.txt
+
+# Build artifacts
+node_modules/
+__pycache__/
+*.pyc
+*.exe
+*.spec
+build/
+dist/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Replit folder
+replit_version/
