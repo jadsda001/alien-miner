@@ -117,23 +117,16 @@ class WebMiner(threading.Thread):
         return res.get('rows', [None])[0]
         
     def do_work(self, last_mine_tx):
-        """หา nonce - ลองใช้ C version ก่อน (เร็วกว่า) fallback เป็น JS"""
+        """หา nonce - ใช้ JS version (เสถียรกว่า)"""
         payload = {"account": self.account_name, "lastMineTx": last_mine_tx}
         startupinfo = None
         if os.name == 'nt':
             startupinfo = subprocess.STARTUPINFO()
             startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
         
-        # ลอง pow_worker (C version) - Linux binary หรือ Windows exe
-        if os.path.exists("./pow_worker"):
-            cmd = ["./pow_worker"]
-            worker_type = "C"
-        elif os.path.exists("pow_worker.exe"):
-            cmd = ["pow_worker.exe"]
-            worker_type = "C"
-        else:
-            cmd = ["node", "pow_worker.js"]
-            worker_type = "JS"
+        # ใช้ JS version เป็นหลัก (เสถียรกว่า C version)
+        cmd = ["node", "pow_worker.js"]
+        worker_type = "JS"
         
         try:
             process = subprocess.Popen(
