@@ -653,8 +653,32 @@ if __name__ == '__main__':
     # Get port from environment (Koyeb sets this)
     port = int(os.environ.get('PORT', 5000))
     
+    # AUTO-START: เริ่มขุดอัตโนมัติเมื่อ server รัน
+    def auto_start():
+        import time
+        time.sleep(3)  # รอ Flask เริ่มก่อน
+        if accounts_data and len(accounts_data) > 1:
+            mining_accounts = accounts_data[1:]
+            add_log("SYSTEM", f"🚀 AUTO-START: เริ่ม {len(mining_accounts)} บัญชีอัตโนมัติ!", "success")
+            add_log("SYSTEM", f"CPU Helper: {first_account_data['name']}", "info")
+            
+            for i, acc in enumerate(mining_accounts):
+                miner = WebMiner(acc)
+                miners[acc['name']] = miner
+                miner.start()
+                if i < 50:
+                    time.sleep(0.1)
+                elif i % 10 == 0:
+                    time.sleep(0.05)
+            
+            add_log("SYSTEM", f"✅ ทุกบอทเริ่มทำงานแล้ว!", "success")
+    
+    # รัน auto-start ใน background thread
+    auto_start_thread = threading.Thread(target=auto_start, daemon=True)
+    auto_start_thread.start()
+    
     print("\n" + "="*50)
-    print("  ALIEN WORLDS MINER - WEB INTERFACE")
+    print("  ALIEN WORLDS MINER - AUTO-START ENABLED")
     print(f"  เปิดเบราว์เซอร์ไปที่: http://localhost:{port}")
     print("="*50 + "\n")
     app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
