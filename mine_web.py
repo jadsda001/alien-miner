@@ -587,26 +587,50 @@ def api_stop():
 def load_accounts():
     global accounts_data, first_account_data
     
-    if not os.path.exists(ACCOUNTS_FILE):
-        add_log("SYSTEM", f"ไม่พบไฟล์ {ACCOUNTS_FILE}", "error")
+    lines = []
+    
+    # 1. ลองอ่านจาก Environment Variable ก่อน (สำหรับ Koyeb)
+    env_accounts = os.environ.get('BOT_ACCOUNTS', '')
+    if env_accounts:
+        add_log("SYSTEM", "อ่าน accounts จาก Environment Variable", "info")
+        lines = env_accounts.split('\n')
+    # 2. ลองอ่านจากไฟล์ bot_accounts_secret.txt
+    elif os.path.exists('bot_accounts_secret.txt'):
+        add_log("SYSTEM", "อ่าน accounts จาก bot_accounts_secret.txt", "info")
+        with open('bot_accounts_secret.txt', 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+    # 3. Fallback ไปที่ .env
+    elif os.path.exists(ACCOUNTS_FILE):
+        add_log("SYSTEM", f"อ่าน accounts จาก {ACCOUNTS_FILE}", "info")
+        with open(ACCOUNTS_FILE, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+    else:
+        add_log("SYSTEM", "ไม่พบ accounts (ไม่มี ENV, bot_accounts_secret.txt, หรือ .env)", "error")
         return
     
-    with open(ACCOUNTS_FILE, 'r', encoding='utf-8') as f:
-        for line in f:
-            if line.startswith('BOT_CONFIG='):
-                parts = line.replace('BOT_CONFIG=', '').strip().split()
-                if len(parts) >= 2:
-                    cooldown = 2400
-                    if len(parts) >= 3:
-                        try:
-                            cooldown = int(parts[2].replace('s', ''))
-                        except:
-                            pass
-                    accounts_data.append({
-                        'name': parts[0].strip(),
-                        'key': parts[1].strip(),
-                        'cooldown': cooldown
-                    })
+    # Parse accounts
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith('#'):
+            continue
+        
+        # รองรับทั้งรูปแบบ "BOT_CONFIG=name key cd" และ "name key cd"
+        if line.startswith('BOT_CONFIG='):
+            line = line.replace('BOT_CONFIG=', '')
+        
+        parts = line.split()
+        if len(parts) >= 2:
+            cooldown = 2400
+            if len(parts) >= 3:
+                try:
+                    cooldown = int(parts[2].replace('s', ''))
+                except:
+                    pass
+            accounts_data.append({
+                'name': parts[0].strip(),
+                'key': parts[1].strip(),
+                'cooldown': cooldown
+            })
     
     if accounts_data:
         first_account_data = accounts_data[0]
