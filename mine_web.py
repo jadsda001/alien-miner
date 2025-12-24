@@ -504,6 +504,12 @@ def index():
     return render_template_string(HTML_TEMPLATE)
 
 
+@app.route('/ping')
+def ping():
+    """Keep-alive endpoint for UptimeRobot"""
+    return 'pong', 200
+
+
 @app.route('/api/status')
 def api_status():
     global miners, accounts_data, first_account_data
@@ -691,10 +697,14 @@ if __name__ == '__main__':
     # รัน auto-start ใน thread แยก
     threading.Thread(target=auto_start, daemon=True).start()
     
+    # Port 7860 = Hugging Face Spaces default
+    port = int(os.environ.get('PORT', 7860))
+    
     print("\n" + "="*50)
     print("  ALIEN WORLDS MINER - WEB INTERFACE")
-    print("  เปิดเบราว์เซอร์ไปที่: http://localhost:8000")
+    print(f"  เปิดเบราว์เซอร์ไปที่: http://localhost:{port}")
     print("  🚀 Auto-Start: เปิดใช้งาน")
+    print("  🤗 Hugging Face Spaces Ready!")
     print("="*50 + "\n")
-    app.run(host='0.0.0.0', port=8000, debug=False, threaded=True)
+    app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
 

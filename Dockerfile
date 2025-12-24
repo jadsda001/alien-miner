@@ -21,11 +21,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy source files
 COPY . .
 
-# Compile C pow_worker for Linux (high performance)
+# Compile C pow_worker for Linux (high performance + optimized)
 RUN gcc -O3 -o pow_worker pow_worker.c -lcrypto
 
-# Expose Flask port
-EXPOSE 5000
+# Hugging Face Spaces uses port 7860
+EXPOSE 7860
 
 # Run the mining bot
 CMD ["python", "mine_web.py"]
