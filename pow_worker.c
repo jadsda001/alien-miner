@@ -1,5 +1,8 @@
 /**
- * pow_worker.c - High-performance Proof-of-Work nonce finder for Alien Worlds
+ * pow_worker.c - Optimized Proof-of-Work nonce finder for Alien Worlds
+ * Features:
+ *   - OpenSSL SHA256 with state caching (prefix computed once)
+ *   - Batch hashing (4 nonces at a time)
  * Compile: gcc -O3 -o pow_worker pow_worker.c -lcrypto
  */
 
@@ -9,6 +12,8 @@
 #include <stdint.h>
 #include <time.h>
 #include <openssl/sha.h>
+
+#define BATCH_SIZE 4  // Hash 4 nonces at a time
 
 // EOSIO name character map
 static const char charmap[] = ".12345abcdefghijklmnopqrstuvwxyz";
@@ -72,6 +77,11 @@ void bytes_to_hex(const uint8_t* bytes, int len, char* hex) {
     hex[len * 2] = '\0';
 }
 
+// Check if hash meets difficulty: hash[0]==0 && hash[1]==0 && hash[2]<16
+static inline int check_difficulty(const uint8_t* hash) {
+    return (hash[0] == 0 && hash[1] == 0 && hash[2] < 16);
+}
+
 int main() {
     char input[1024];
     char account[64];
@@ -119,38 +129,56 @@ int main() {
     memcpy(prefix, account_buf, 8);
     memcpy(prefix + 8, tx_buf, 8);
     
+    // === OPTIMIZATION 1: Pre-compute prefix hash state ===
+    SHA256_CTX prefix_ctx;
+    SHA256_Init(&prefix_ctx);
+    SHA256_Update(&prefix_ctx, prefix, 16);
+    // Now prefix_ctx holds the state after hashing prefix
+    // We only need to add nonce (8 bytes) each iteration
+    
     // Start from random position
     srand(time(NULL));
     uint64_t nonce = ((uint64_t)rand() << 32) | rand();
     
-    uint8_t data[24];
-    memcpy(data, prefix, 16);
-    
     clock_t start_time = clock();
     uint64_t iterations = 0;
-    uint8_t hash[SHA256_DIGEST_LENGTH];
+    
+    // === OPTIMIZATION 2: Batch hashing ===
+    uint8_t nonce_bufs[BATCH_SIZE][8];
+    uint8_t hashes[BATCH_SIZE][SHA256_DIGEST_LENGTH];
+    SHA256_CTX ctxs[BATCH_SIZE];
     
     while (1) {
-        uint64_to_le(nonce, data + 16);
-        SHA256(data, 24, hash);
-        iterations++;
-        
-        // Check difficulty: hash[0] == 0 && hash[1] == 0 && hash[2] < 16
-        if (hash[0] == 0 && hash[1] == 0 && hash[2] < 16) {
-            double elapsed = (double)(clock() - start_time) / CLOCKS_PER_SEC;
-            uint64_t hashrate = (uint64_t)(iterations / elapsed);
-            
-            char nonce_hex[17];
-            uint8_t nonce_buf[8];
-            uint64_to_le(nonce, nonce_buf);
-            bytes_to_hex(nonce_buf, 8, nonce_hex);
-            
-            printf("{\"success\":true,\"nonce\":\"%s\",\"iterations\":%llu,\"timeMs\":%d,\"hashrate\":%llu}\n",
-                   nonce_hex, (unsigned long long)iterations, (int)(elapsed * 1000), (unsigned long long)hashrate);
-            return 0;
+        // Prepare batch of nonces
+        for (int i = 0; i < BATCH_SIZE; i++) {
+            uint64_to_le(nonce + i, nonce_bufs[i]);
         }
         
-        nonce++;
+        // Hash batch using cached prefix state
+        for (int i = 0; i < BATCH_SIZE; i++) {
+            ctxs[i] = prefix_ctx;  // Copy pre-computed state (fast!)
+            SHA256_Update(&ctxs[i], nonce_bufs[i], 8);
+            SHA256_Final(hashes[i], &ctxs[i]);
+        }
+        
+        iterations += BATCH_SIZE;
+        
+        // Check batch for valid hash
+        for (int i = 0; i < BATCH_SIZE; i++) {
+            if (check_difficulty(hashes[i])) {
+                double elapsed = (double)(clock() - start_time) / CLOCKS_PER_SEC;
+                uint64_t hashrate = (elapsed > 0) ? (uint64_t)(iterations / elapsed) : 0;
+                
+                char nonce_hex[17];
+                bytes_to_hex(nonce_bufs[i], 8, nonce_hex);
+                
+                printf("{\"success\":true,\"nonce\":\"%s\",\"iterations\":%llu,\"timeMs\":%d,\"hashrate\":%llu}\n",
+                       nonce_hex, (unsigned long long)iterations, (int)(elapsed * 1000), (unsigned long long)hashrate);
+                return 0;
+            }
+        }
+        
+        nonce += BATCH_SIZE;
         
         // Timeout check every 100000 iterations
         if (iterations % 100000 == 0) {
