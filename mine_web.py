@@ -36,7 +36,7 @@ first_account_data = None
 miners = {}
 logs = deque(maxlen=200)
 accounts_data = []
-mining_semaphore = threading.Semaphore(1)  # ขุด PoW ทีละ 1 ID (ป้องกัน block)
+mining_semaphore = threading.Semaphore(3)  # ขุด PoW พร้อมกัน 3 ID
 
 
 def get_rpc_url():
