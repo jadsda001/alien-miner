@@ -670,8 +670,31 @@ if __name__ == '__main__':
         exit(1)
     
     load_accounts()
+    
+    # Auto-start mining หลังจากโหลด accounts
+    def auto_start():
+        time.sleep(3)  # รอให้ Flask พร้อม
+        if accounts_data and len(accounts_data) > 1:
+            add_log("SYSTEM", "🚀 Auto-Start Mining...", "success")
+            # เริ่มขุดอัตโนมัติ
+            mining_accounts = accounts_data[1:]
+            for i, acc in enumerate(mining_accounts):
+                miner = WebMiner(acc)
+                miners[acc['name']] = miner
+                miner.start()
+                if i < 50:
+                    time.sleep(0.1)
+                elif i % 10 == 0:
+                    time.sleep(0.05)
+            add_log("SYSTEM", f"✅ Auto-started {len(mining_accounts)} บัญชี", "success")
+    
+    # รัน auto-start ใน thread แยก
+    threading.Thread(target=auto_start, daemon=True).start()
+    
     print("\n" + "="*50)
     print("  ALIEN WORLDS MINER - WEB INTERFACE")
-    print("  เปิดเบราว์เซอร์ไปที่: http://localhost:5000")
+    print("  เปิดเบราว์เซอร์ไปที่: http://localhost:8000")
+    print("  🚀 Auto-Start: เปิดใช้งาน")
     print("="*50 + "\n")
-    app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
+    app.run(host='0.0.0.0', port=8000, debug=False, threaded=True)
+
