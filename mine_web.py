@@ -117,16 +117,23 @@ class WebMiner(threading.Thread):
         return res.get('rows', [None])[0]
         
     def do_work(self, last_mine_tx):
-        """หา nonce - ใช้ JS version (เสถียรกว่า)"""
+        """หา nonce - ลองใช้ C version ก่อน (เร็วกว่า) fallback เป็น JS"""
         payload = {"account": self.account_name, "lastMineTx": last_mine_tx}
         startupinfo = None
         if os.name == 'nt':
             startupinfo = subprocess.STARTUPINFO()
             startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
         
-        # ใช้ JS version เป็นหลัก (เสถียรกว่า C version)
-        cmd = ["node", "pow_worker.js"]
-        worker_type = "JS"
+        # ลอง pow_worker (C version) - รองรับทั้ง Windows และ Linux
+        if os.path.exists("pow_worker.exe"):
+            cmd = ["pow_worker.exe"]
+            worker_type = "C-Win"
+        elif os.path.exists("pow_worker"):
+            cmd = ["./pow_worker"]
+            worker_type = "C-Linux"
+        else:
+            cmd = ["node", "pow_worker.js"]
+            worker_type = "JS"
         
         try:
             process = subprocess.Popen(
@@ -578,107 +585,47 @@ def api_stop():
 
 
 def load_accounts():
-    """Load accounts from BOT_CONFIG env var or .env file
-    
-    BOT_CONFIG format: name:key:cooldown,name:key:cooldown,...
-    .env format: BOT_CONFIG=name key cooldowns (one per line)
-    """
     global accounts_data, first_account_data
     
-    # Try loading from BOT_CONFIG environment variable first (for Koyeb/Docker)
-    bot_config_env = os.environ.get('BOT_CONFIG', '')
-    if bot_config_env:
-        add_log("SYSTEM", "Loading accounts from BOT_CONFIG environment variable", "info")
-        for entry in bot_config_env.split(','):
-            parts = entry.strip().split(':')
-            if len(parts) >= 2:
-                cooldown = 2800  # default
-                if len(parts) >= 3:
-                    try:
-                        cooldown = int(parts[2].replace('s', ''))
-                    except:
-                        pass
-                accounts_data.append({
-                    'name': parts[0].strip(),
-                    'key': parts[1].strip(),
-                    'cooldown': cooldown
-                })
-    else:
-        # Fallback to .env file (for local development)
-        if not os.path.exists(ACCOUNTS_FILE):
-            add_log("SYSTEM", f"ไม่พบไฟล์ {ACCOUNTS_FILE}", "error")
-            return
-        
-        with open(ACCOUNTS_FILE, 'r', encoding='utf-8') as f:
-            for line in f:
-                if line.startswith('BOT_CONFIG='):
-                    parts = line.replace('BOT_CONFIG=', '').strip().split()
-                    if len(parts) >= 2:
-                        cooldown = 2400
-                        if len(parts) >= 3:
-                            try:
-                                cooldown = int(parts[2].replace('s', ''))
-                            except:
-                                pass
-                        accounts_data.append({
-                            'name': parts[0].strip(),
-                            'key': parts[1].strip(),
-                            'cooldown': cooldown
-                        })
+    if not os.path.exists(ACCOUNTS_FILE):
+        add_log("SYSTEM", f"ไม่พบไฟล์ {ACCOUNTS_FILE}", "error")
+        return
+    
+    with open(ACCOUNTS_FILE, 'r', encoding='utf-8') as f:
+        for line in f:
+            if line.startswith('BOT_CONFIG='):
+                parts = line.replace('BOT_CONFIG=', '').strip().split()
+                if len(parts) >= 2:
+                    cooldown = 2400
+                    if len(parts) >= 3:
+                        try:
+                            cooldown = int(parts[2].replace('s', ''))
+                        except:
+                            pass
+                    accounts_data.append({
+                        'name': parts[0].strip(),
+                        'key': parts[1].strip(),
+                        'cooldown': cooldown
+                    })
     
     if accounts_data:
         first_account_data = accounts_data[0]
         add_log("SYSTEM", f"CPU Helper: {first_account_data['name']}", "info")
         add_log("SYSTEM", f"โหลด {len(accounts_data)} บัญชี", "success")
-    else:
-        add_log("SYSTEM", "ไม่พบบัญชี! กรุณาตั้งค่า BOT_CONFIG", "error")
-
-
-# Health check endpoint for Koyeb/Docker
-@app.route('/ping')
-def ping():
-    return jsonify({"status": "ok", "timestamp": datetime.now(timezone.utc).isoformat()})
 
 
 if __name__ == '__main__':
-    # Check dependencies - warn but don't exit (pow_worker is compiled in Docker)
-    if not os.path.exists("./pow_worker") and not os.path.exists("pow_worker.exe") and not os.path.exists("pow_worker.js"):
-        print("WARNING: No PoW worker found! Need pow_worker, pow_worker.exe, or pow_worker.js")
+    # Check dependencies
+    if not os.path.exists("pow_worker.js"):
+        print("ERROR: pow_worker.js not found!")
+        exit(1)
     if not os.path.exists("sign.js"):
         print("ERROR: sign.js not found!")
         exit(1)
     
     load_accounts()
-    
-    # Get port from environment (Koyeb sets this)
-    port = int(os.environ.get('PORT', 5000))
-    
-    # AUTO-START: เริ่มขุดอัตโนมัติเมื่อ server รัน
-    def auto_start():
-        import time
-        time.sleep(3)  # รอ Flask เริ่มก่อน
-        if accounts_data and len(accounts_data) > 1:
-            mining_accounts = accounts_data[1:]
-            add_log("SYSTEM", f"🚀 AUTO-START: เริ่ม {len(mining_accounts)} บัญชีอัตโนมัติ!", "success")
-            add_log("SYSTEM", f"CPU Helper: {first_account_data['name']}", "info")
-            
-            for i, acc in enumerate(mining_accounts):
-                miner = WebMiner(acc)
-                miners[acc['name']] = miner
-                miner.start()
-                if i < 50:
-                    time.sleep(0.1)
-                elif i % 10 == 0:
-                    time.sleep(0.05)
-            
-            add_log("SYSTEM", f"✅ ทุกบอทเริ่มทำงานแล้ว!", "success")
-    
-    # รัน auto-start ใน background thread
-    auto_start_thread = threading.Thread(target=auto_start, daemon=True)
-    auto_start_thread.start()
-    
     print("\n" + "="*50)
-    print("  ALIEN WORLDS MINER - AUTO-START ENABLED")
-    print(f"  เปิดเบราว์เซอร์ไปที่: http://localhost:{port}")
+    print("  ALIEN WORLDS MINER - WEB INTERFACE")
+    print("  เปิดเบราว์เซอร์ไปที่: http://localhost:5000")
     print("="*50 + "\n")
-    app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
+    app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)

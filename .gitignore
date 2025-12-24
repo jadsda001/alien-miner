@@ -1,23 +1,23 @@
-# Secrets - NEVER commit these
+# Dependencies
+node_modules/
+
+# Environment secrets (keep private!)
 .env
 bot_accounts_secret.txt
 
-# Build artifacts
-node_modules/
+# Windows binary (not for Linux)
+*.exe
+
+# Python cache
 __pycache__/
 *.pyc
-*.exe
-*.spec
+*.pyo
+
+# Build artifacts
 build/
 dist/
+*.spec
 
 # IDE
 .vscode/
 .idea/
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Replit folder
-replit_version/
